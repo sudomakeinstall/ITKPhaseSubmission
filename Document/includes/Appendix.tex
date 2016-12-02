@@ -1,0 +1,119 @@
+
+\appendix
+
+\section{Laplace's Equation}
+
+The Laplacian operator, $\Delta$, is defined for an $n$-dimensional function as the sum of its unmixed partial second derivatives (Equation~\ref{eqn:LaplacianOperator}):
+
+\begin{equation}
+\label{eqn:LaplacianOperator}
+\Delta f = \nabla^2f = \sum_{i=1}^n \frac{\delta^2f}{\delta x_i^2}
+\end{equation}
+
+In the two-dimensional case, this takes the following familiar form (Equation~\ref{eqn:2DLaplacianOperator}):
+
+\begin{equation}
+\label{eqn:2DLaplacianOperator}
+\Delta f = \frac{\delta^2 f}{\delta x^2} + \frac{\delta^2 f}{\delta y^2}
+\end{equation}
+
+In the special case where $\Delta f = 0$, this is known as Laplace's Equation. The discrete Laplacian may be approximated via simple second differences.  The one-dimensional second-difference operator $\begin{matrix}[1 & -2 & 1]\end{matrix}$ may be taken successively in each image dimension to produce a Laplacian image.  In the two-dimensional case, the discrete Laplacian operator is computed as follows:
+
+\begin{equation}
+\label{eqn:2DDiscreteLaplacianOperator}
+\begin{matrix}
+0 $ 1 $ 0 \\
+1 $ -4 $ 1 \\
+0 $ 1 $ 0
+\end{matrix}
+\end{equation}
+
+In ITK, the discrete Laplacian operator is provided in the \doxygen{LaplacianOperator} class, and is applied to an image using the \doxygen{LaplacianImageFilter} class.  Laplace's equation can be solved efficiently by means of the discrete cosine transform (DCT) \cite{Ghiglia1998}.  In particular, the original image $f$ can be recovered by taking the forward DCT of the Laplacian image $\Delta f$, applying a pixelwise modulation, and taking the reverse DCT on the result (Equation~\ref{eqn:DCTPoisson}).  In this equation, $n$ is the dimension of the image, $S_n$ is the number of pixels across the image in direction $d$, and $i_n$ is the pixel index in direction $n$.
+
+\begin{equation}
+\label{eqn:DCTPoisson}
+f = DCT^{-1} \left \{\frac{\displaystyle DCT \left \{ \Delta f \right \}}{\displaystyle \sum_{n=0}^{N-1} 2 \cos \left( \frac{\displaystyle \pi i_n}{\displaystyle S_n} \right) -2N} \right \}
+\end{equation}
+
+It is possible to formulate the problem in such a way that it can be solved with either the fast Fourier transform (FFT), discrete sine transform (DST), or discrete cosine transform (DCT).  The specifics of each implementation differ primarily in the steps that must be undertaken to satisfy Neumann boundary conditions.  In order to be solved with the FFT, for instance, the Laplacian must be reflected to the left and upwards (Figure ~\ref{fig:Reflection}).  The DCT (also known as the `even' or `real-to-real' transform), however, is performed on one half of an implicitly reflected matrix, obviating the reflection step.  Though this difference is likely negligible for an isolated 2D calculation, use of the DCT could significantly reduce memory and processing requirements when applied iteratively or to higher dimensional data.  For this reason, the DCT is prefered if available.
+
+\begin{figure}[h]
+\center
+\scalebox{-1}[-1]{\includegraphics[width=0.25\textwidth]{images/appendix/cameraman.png}}
+\hspace{-6px}
+\scalebox{1}[-1]{\includegraphics[width=0.25\textwidth]{images/appendix/cameraman.png}} \\
+\vspace{-2px}
+\scalebox{-1}[1]{\includegraphics[width=0.25\textwidth]{images/appendix/cameraman.png}}
+\hspace{-6px}
+\scalebox{1}[1]{\includegraphics[width=0.25\textwidth]{images/appendix/cameraman.png}}
+\itkcaption[Reflection]{The ``cameraman'' test image, reflected to the left and upwards to satisfy Neumann boundary conditions.}
+\label{fig:Reflection}
+\end{figure}
+
+\section{Implementation and Usage}
+
+\subsection{Discrete Cosine Transform}
+
+FFTW (the `Fastest Fourier Transform in the West' \cite{Frigo2005}) is a library in the C programming language, which can be made available by building ITK with the CMake variable \code{ITK\_USE\_FFTWF} or \code{ITK\_USE\_FFTWD} (single and double precision floating point, respectively) to \code{ON}.  FFTW provides a wide selection of efficient discrete transforms, including DCT types I--IV (corresponding to `\code{kind}s' \code{REDFT00}, \code{REDFT10}, \code{REDFT01}, and \code{REDFT11}, respectively).  These plans differ practically from one another in terms of inverse transforms and normalization procedures (\code{REDFT00} and \code{REDFT11} are inverses of themselves, whereas \code{REDFT10} and \code{REDFT01} are inverses of each other).  In particular, \code{REDFT10} and \code{REDFT01} are known as `the' forward and reverse DCT, respectively.  A real-to-real plan is constructed according to the following function definition:
+
+\small
+\begin{verbatim}
+fftw_plan fftw_plan_r2r(int rank, const int *n, double *in, double *out,
+                             const fftw_r2r_kind *kind, unsigned flags);
+\end{verbatim}
+\normalsize
+
+\code{int rank} refers to the image dimension; \code{const int *n} to an array indicating the size in each dimension; \code{double *in} and \code{double *out} to input and output arrays allocated using \code{fftw\_malloc}, \code{const fftw\_r2r\_kind *kind} to the type of transform that should be performed in each dimension, and \code{unsigned flags} to instructions concerning numerical precision.  The \code{itk::Image} buffers are assigned to the input and output arrays using the \code{GetBufferPointer()} method.  Each element of the \code{const fftw\_r2r\_kind} array is set to \code{FFTW\_REDFT01} in the case of the forward transform and \code{FFTW\_REDFT10} in the case of the inverse transform.  The transform direction can be specified at the level of the itk class using the \code{TransformDirection()} method.  Because FFTW returns an unnormalized transform, the image is divided by \code{numpix*pow(2, TInputImage::ImageDimension)} in the case of the inverse transform.
+
+The provided class \code{itk::DCTImageFilter}, which inherits from \code{itk::ImageToImageFilter}, provides a simple, templeted interface to the \code{REDFT01} and \code{REDFT10} plans.  The following minimal example code demonstrates definition, instantiation, and usage of the class, and Figure~\ref{fig:DCT} illustrates a simple low-pass DCT filtering example (source code provided).\footnote{Note that all images have been linearly rescaled (except for transforms, which have been logarithmically rescaled) for visualization purposes.}
+
+\small
+\begin{verbatim}
+typedef itk::DCTImageFilter< WorkImageType, WorkImageType > DCTType;
+DCTType::Pointer dct = DCTType::New();
+dct->SetInput( reader->GetOutput() );
+dct->SetTransformDirection( DCTType::Forward );
+dct->Update();
+\end{verbatim}
+\normalsize
+
+\begin{figure}
+\center
+\includegraphics[width=0.24\textwidth]{images/appendix/brain.png}
+\includegraphics[width=0.24\textwidth]{images/appendix/dct.png}
+\includegraphics[width=0.24\textwidth]{images/appendix/dctFiltered.png}
+\includegraphics[width=0.24\textwidth]{images/appendix/filtered.png}
+\itkcaption[Reflection]{Simple demonstration of low-pass DCT filtering.  From left to right are the input image, the DCT transform, the masked transform, and the output image.}
+\label{fig:DCT}
+\end{figure}
+
+\subsection{Poisson Solver}
+
+The \code{itk::DCTPoissonSolver} class transforms the input, applies a modulation, and reverse transforms back into the image domain, as described in Equation~\ref{eqn:DCTPoisson}.  The following minimal example demonstrates definition, instantiation, and usage of the \code{itk::DCTPoissonSolverImageFilter} class.
+
+\small
+\begin{verbatim}
+typedef itk::DCTPoissonSolverImageFilter< WorkImageType, WorkImageType >   PoissonType;
+PoissonType::Pointer solver = PoissonType::New();
+solver->SetInput( laplacian->GetOutput() );
+solver->Update();
+\end{verbatim}
+\normalsize
+
+\begin{figure}
+\center
+\includegraphics[width=0.32\textwidth]{images/appendix/brain.png}
+\includegraphics[width=0.32\textwidth]{images/appendix/laplacian.png}
+\includegraphics[width=0.32\textwidth]{images/appendix/solution.png}
+\itkcaption[Laplacian]{The original (left) and Laplacian (right) images for an axial CT slice through the brain.}
+\label{fig:Laplacian}
+\end{figure}
+
+Figure~\ref{fig:Laplacian} shows an example of an image of the brain, its Laplacian, and the solution of the Laplacian.  In the rescaled image, the solution appears to match exactly the input image.  However, by plotting the vertical centerline of each image (Figure~\ref{fig:Additive}), we see that the input and output differ by an additive constant of $\sim123.7$, as is expected from any integration procedure.
+
+\begin{figure}
+\center
+\includegraphics[width=0.8\textwidth]{images/appendix/additive_constant.png}
+\itkcaption[Additive]{Plot of grayscale intensities along the vertical centerline of the input and output images.  Note that the two curves differ by an additive constant.}
+\label{fig:Additive}
+\end{figure}

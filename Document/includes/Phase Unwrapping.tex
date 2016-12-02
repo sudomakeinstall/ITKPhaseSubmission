@@ -1,0 +1,49 @@
+\section{Phase Unwrapping}
+
+\subsection{Path-Following vs Minimum Norm Algorithms}
+
+\subsubsection{Path-Following Algorithms}
+
+Phase unwrapping algorithms may be categorized as path-following or minimum norm algorithms.  Path-following algorithms generally specify one or more starting points at which the phase is considered to be `true.'  Residues, masks, and/or a continuous measure of phase quality may then be used to restrict or guide the allowed path(s), along which the encountered pixels are unwrapped based on local pixel values.  Because the unwrapping operation consists entirely of adding some multiple of $2\pi$, the resulting phase is necessarily `congruent' to the wrapped phase input.
+
+The \code{itk::ItohPhaseUnwrapping} class presented above is the simplest possible example of a path-following algorithm.  More sophisticated algorithms have been described which attempt to restrict the possible paths so as to avoid unwrapping through low-quality regions:
+
+\begin{itemize}
+
+\item Goldstein's Branch Cut Phase Unwrapping \cite{Goldstein1988}
+\item Flynn's Quality-Guided Residue-Mask Phase Unwrapping \cite{Flynn1996}
+\item Flynn's Minimum Discontinuity Phase Unwrapping \cite{Flynn1997}
+\item Quality-Guided Phase Unwrapping
+
+\end{itemize}
+
+While Goldstein's and Flynn's algorithms rely on residues, the quality-guided algorithm relies on a user-defined quality map (such as phase derivative variance, discussed above).  This distinction is important because of the observation that residues are only physically meaningful in two dimensions.  Therefore, Goldstein's and Flynn's algorithms are only useful for two-dimensional phase unwrapping.  Phase derivative variance and other quality measures, however, may easily be generalized to arbitrary dimension.  Therefore, the quality-guided approach may be implemented for $n$-dimensional images.  For this reason, \code{itk:QualityGuidedPhaseUnwrappingImageFilter} (defined in \code{itkQualityGuidedPhaseUnwrappingImageFilter.h}) was implimented for this submission, whereas Goldstein's and Flynn's algorithms were not considered.
+
+\subsubsection{Minimum Norm Algorithms}
+
+The framework for the minimum $L^p$-norm algorithms was first presented by Ghiglia, et al, in \cite{Ghiglia1998}. Minimum norm algorithms may be subclassified according to (a) whether they take into account phase quality and (b) the exponent of the term being minimized.  Weighted algorithms penalize differences in low-quality pixels less than high-quality pixels, whereas unweighted algorithms weight differences in all pixels equally, regardless of quality.  To give physical significance to the particular norm chosen, $L^0$-norm methods minimize the number of pixels that ate not congruent to the input, $L^1$-norm methods minimize the absolute differences, and $L^2$-norm methods minimize the squared differences.  Unweighted, minimum $L^2$-norm phase unwrapping may be implimented efficiently by taking advantage of the discrete cosine transform (DCT).  This algorithm is implemented in the \code{itk:DCTPhaseUnwrappingImageFilter} (defined in \code{itkDCTPhaseUnwrappingImageFilter.h}).
+
+\subsection{Quality-Guided Phase Unwrapping: Implementation Summary}
+
+The \code{itk::QualityGuidedPhaseUnwrapping} class iterates over three images: the wrapped image, the quality image, and a binary image.  A pixel in the binary image is \code{true} if the pixel has been unwrapped, or \code{false} otherwise.  Additionally, a list is maintained which contains the index and quality of all `candidate pixels.'  A pixel is considered a candidate if (a) it adjoins a pixel that has been unwrapped and (b) has not been unwrapped.
+
+Efficiently maintaining the list of candidate pixels is of particular importance for this filter.  To this end, this submission provides the \code{itk::IndexValuePair} class (defined in \code{itkIndexValuePair.h}), which has properties \code{Index} and \code{Value}.  The class overloads the \code{==} operator such that \code{pair1 == pair2} is \code{true} if \code{pair1.Index == pair2.Index} is \code{true}, and overloads the \code{>} operator such that \code{pair1 > pair2} is \code{true} if \code{pair1.Value > pair2.Value} is \code{true}.  As such, instances of this class can be stored in a \code{std::set}, ensuring that (a) the same pixel location cannot be stored twice and (b) the pixels are sorted according to their quality score.  Therefore, an \code{itk::IndexValuePair} can be added to the list without first checking whether it is already a member, and the highest-quality pixel can always be retrieved by selecting the last element of the \code{std::set}.
+
+The user sets the active index using the \code{SetTruePhase()} method.  This is taken as the starting point for iteration, and is set to be \code{true} in the binary image.  \code{itk::IndexValuePair}s for the pixels plus or minus one index in each direction are added to the list of candidate pixels.  The pixel in the list with the highest quality is unwrapped and made the active index, and the corresponding index in the binary image is set to \code{true}.  The process repeats while the list of candidate pixels is non-empty.
+
+Once \code{Update()} has been called, the unwrapped and quality images may be retrieved via the \code{GetPhase()} and \code{GetQuality()} methods, respectively.  Currently, the filter only supports phase derivative variance as a quality measure, though the filter could be easily extended to include others.
+
+\subsection{DCT Phase Unwrapping: Implementation Summary}
+
+The unweighted, minimum $L^2$ norm solution is calculated efficiently in \code{itk::DCTPhaseUnwrappingImageFilter} (defined in \code{itkDCTPhaseUnwrappingImageFilter.h}) by taking advantage of Fourier methods for solving Laplace's equation ($\bigtriangleup \phi = 0$), as described in \cite{Ghiglia1998}.  \code{itk::DCTPhaseUnwrappingImageFilter} uses the two contributed classes \code{itk::DCTImageFilter} and \code{itk::DCTPoissonSolverImageFilter}.  We refer the reader to the Appendix for a discussion of these classes, as they are of general interest to the image processing community, but may obscure the primary objectives of this submission if described in full here.  Briefly:
+
+\begin{itemize}
+
+\item The wrapped phase Laplacian of the input is calculated using \code{itk::WrappedPhaseLaplacianImageFilter} (defined in \code{itkWrappedPhaseLaplacianImageFilter.h}).
+\item The forward DCT is taken using \code{itk::DCTImageFilter} (defined in \code{itkDCTImageFilter.h}).
+\item The  transformed image undergoes a pixelwise modulation.
+\item The inverse DCT is taken.
+
+\end{itemize}
+
+\code{itk::DCTImageFilter} provides access to the $n$-dimensional real-to-real transform provided in the FFTW library \cite{Frigo2005}.  For this reason, in order to use this filter (and its dependents), ITK must be built with the cmake variable \code{USE\_FFTWD} set to \code{ON}, and any project using this filter is subject to the GPL license.

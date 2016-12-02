@@ -1,0 +1,97 @@
+\section{Background}
+
+\subsection{Theory}
+
+Data collected via magnetic resonance (MR) imaging is inherently complex-valued, containing both real and imaginary (or equivalently, phase and magnitude) components (Figure~\ref{fig:Complex_Plane}).  Phase data is useful in a variety of applications, such as harmonic phase (HARP) analysis of tagged MR \cite{Osman1999}, susceptibility weighted imaging (SWI) \cite{Li2011}, and phase contrast angiography/venography .  Although phase at a given pixel can generally take on any value, it is impossible to distinguish between true ($\phi$) and principal ($\hat{\phi}$) phase values separated by an arbitrary multiple $k$ of $2\pi$, such that the measured phase value is `wrapped' within the range $(-\pi, \pi]$.  In theory, true phase may be recovered from principle phase by adding an integer multiple $k$ of $2\pi$, in a process known as `unwrapping' (Equation~\ref{eqn:PrinciplePhase}).
+
+\begin{equation}
+\label{eqn:PrinciplePhase}
+\phi = \hat{ \phi } + k2\pi
+\end{equation}
+
+\begin{figure}[h] % h indicates inline
+\center
+\begin{tikzpicture}[scale=2.5]
+\draw [very thin, lightgray] (0,0) circle [radius=1]; % circle
+\draw [<->, black] (-1.2,0) -- (1.2,0); % imaginary
+\draw [<->, black] (0,-1.2) -- (0,1.2); % real
+\draw [->, thick, gray] (0.7071,0) -- (0.7071,0.7071); % b
+\draw [->, thick, gray] (0,0) -- (0.7071, 0); % a
+\draw [->, very thick, teal] (0,0) -- (0.7071,0.7071); % R
+\node [above right] at (0.2,0) {$\hat{\phi}$};
+\node [below] at (0.3535, 0) {$a$};
+\node [right] at (0.7071, 0.3535) {$b$};
+\node [above left] at (0.3535, 0.3535) {$R$};
+\node [right] at (1.2, 0) {Real};
+\node [above] at (0, 1.2) {Imaginary};
+\end{tikzpicture}
+\itkcaption[Complex_Plane]{The Complex Plane.  Here a complex number, $z$, is represented as a point on the complex plane.  $z$ can be represented equivalently in cartesian coordinates as the sum of a real and an imaginary number ($z = a+bi$) or in polar coordinates as a magnitude phase pair ($[R,\phi]$).}
+\label{fig:Complex_Plane}
+\end{figure}
+
+The reverse operation, by which principle phase is obtained from its true phase, is denoted by the wrapping operator $W{}$ (Equation~\ref{eqn:Wrapping_Operator}), which can be practically implimented with the four-quadrant arctangent function (\code{std::atan2(x,y)}).
+
+\begin{equation}
+\label{eqn:Wrapping_Operator}
+\hat{\phi} = \arctan( \sin( \phi ), \cos( \phi )) \equiv W \left\{ \phi \right\}
+\end{equation}
+
+Itoh \cite{Itoh1982} observed that the locally `corrected' phase gradient (i.e., the phase gradient after appropriate addition of $k2\pi$ such that the difference between adjacent pixels is in the range $(-\pi,\pi]$) may be written in terms of the wrapping operator (Equation~\ref{eqn:Wrapped_Phase_Gradient}).\footnote{$i$ is used in this submission both to refer to the mathematical constant meaning $\sqrt{-1}$, as previously, and, in this context, to pixel index along an arbitrary dimension ($0 < i < M-1$, where M is the number of pixels along that dimension).  The difference in usage should be clear from context.  Note also that the above definition only applies when both $i$ and $i-1$ are completely within the image; otherwise, $\Delta \phi_i \equiv 0$.}
+
+\begin{equation}
+\label{eqn:Wrapped_Phase_Gradient}
+\Delta \phi_{i} \equiv W \left \{ \hat{\phi_{i}} - \phi_{i-1} \right \}
+\end{equation}
+
+A target pixel ($\phi_{i}$) may be `unwrapped' relative to an adjacent reference pixel ($\phi_{i-1}$) such that their difference is in the range $(-\pi, \pi]$.  This operation can be written in terms of the wrapped phase gradient (Equation~\ref{eqn:Binary_Unwrap}).
+
+\begin{equation}
+\label{eqn:Binary_Unwrap}
+\phi_{i} = \phi_{i-1} + \Delta \phi_{i}
+\end{equation}
+
+\subsection{Introduction to the ITKPhase Module}
+
+The presented module provides the unary wrap operator as a functor, \code{itk::Functor::WrapPhaseFunctor} (defined in \code{itkWrapPhaseFunctor.h}).  The following snippet demonstrates the basic use of the class.\footnote{The constant \code{vnl\_math::pi} is defined in the \code{vnl/vnl\_math.h} header file. \code{std::cout} and \code{std::endl} are defined in the \code{<iostream>} header file.}
+
+\small
+\begin{verbatim}
+  itk::Functor::WrapPhaseFunctor< double > wrapFunc;
+
+  std::cout << wrapFunc( 3 ) << std::endl; // 3
+  std::cout << wrapFunc( 0 ) << std::endl; // 0
+  std::cout << wrapFunc( -3 ) << std::endl; // -3
+  std::cout << wrapFunc( 1 + vnl_math::pi ) << std::endl; // -2.14159
+  std::cout << wrapFunc( -vnl_math::pi - 1 ) << std::endl; // 2.14159
+\end{verbatim}
+\normalsize
+
+\code{itk::PhaseImageToImageFilter} (defined in \code{itkPhaseImageToImageFilter.h}) inherits from \doxygen{ImageToImageFilter} and serves as the base class for most classes in this module.
+
+This class provides two methods, \code{Wrap(pixel)} and \code{Unwrap(target,relativeToReference)}.  The first takes one argument and provides an interface to \code{WrapPhaseFunctor} (see Equation~\ref{eqn:Wrapping_Operator}).  The second makes use of the first to unwrap one pixel relative to another (see Equation~\ref{eqn:Binary_Unwrap}).
+
+\begin{figure}[h]
+\center
+
+\includegraphics[width=0.24\textwidth]{images/2/00a_ramp_wrapped.png}
+\includegraphics[width=0.24\textwidth]{images/2/00b_ramp_unwrapped.png}
+\includegraphics[width=0.24\textwidth]{images/2/00c_noise_wrapped.png}
+\includegraphics[width=0.24\textwidth]{images/2/00d_noise_unwrapped.png}
+
+\itkcaption[Simulated_Phase_Examples]{Simulated phase images, created by the \code{itk::PhaseExamplesImageSource} class.  Wrapped phase ramp (far left); wrapped phase ramp with noise patch (center left); unwrapped phase ramp (center right); unwrapped phase ramp with noise patch (far right).}
+\label{fig:Simulated_Phase_Examples}
+\end{figure}
+
+For convenience, the ITKPhase module also includes \code{itk::PhaseExamplesImageSource} (defined in \code{itkPhaseExamplesImageSource.h}), which provides simple simulated phase examples for demonstrating the functionality of the module's classes.
+
+By default, the class outputs a simple, wrapped phase ramp (Figure~\ref{fig:Simulated_Phase_Examples}, far left).\footnote{For visualization purposes, all images have been rescaled prior to writing to png.}
+
+\small
+\begin{verbatim}
+  typedef itk::PhaseExamplesImageSource< WorkImageType > ExampleType;
+  ExampleType::Pointer phase = ExampleType::New();
+  phase->Update();
+\end{verbatim}
+\normalsize
+
+A patch of additive gaussian noise can be added by calling \code{phase->SetNoise(true)} (Figure~\ref{fig:Simulated_Phase_Examples}, center right), and unwrapped versions of these images can be obtained by calling \code{phase->SetWrap(false)} (Figure~\ref{fig:Simulated_Phase_Examples}, center left and far right, respectively).  Though not demonstrated in this submission, the mean, standard deviation, and seed of the noise can be manually set using the \code{SetNoiseMean()}, \code{SetNoiseSD()}, and \code{SetNoiseSeed()} methods.

@@ -1,0 +1,106 @@
+\documentclass{InsightArticle}
+
+\usepackage{tikz}
+\usetikzlibrary{arrows,shapes,trees,calc}
+\usepackage{graphicx}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  hyperref should be the last package to be loaded.
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage[dvips,
+bookmarks,
+bookmarksopen,
+backref,
+colorlinks,linkcolor={blue},citecolor={blue},urlcolor={blue},
+]{hyperref}
+
+\title{N-Dimensional Phase Unwrapping}
+
+%
+% NOTE: This is the last number of the "handle" URL that
+% The Insight Journal assigns to your paper as part of the
+% submission process. Please replace the number "1338" with
+% the actual handle number that you get assigned.
+%
+\newcommand{\IJhandlerIDnumber}{xxxx}
+
+% Increment the release number whenever significant changes are made.
+% The author and/or editor can define 'significant' however they like.
+\release{0.00}
+
+% At minimum, give your name and an email address.  You can include a
+% snail-mail address if you like.
+\author{Davis M. Vigneault,$^{1,2,3}$ Wen-Tung Wang, PhD,$^{2}$ Michael Tee,$^{1,2}$ David A. Bluemke, MD, PhD,$^{2}$ and J. Alison Noble, PhD$^{1}$}
+\authoraddress{$^{1}$Institute of Biomedical Engineering, Department of Engineering Science, University of Oxford, Oxford, United Kingdom.\\
+               $^{2}$Department of Radiology and Imaging Sciences, Clinical Center, National Institutes of Health, Bethesda, MD, United States.\\
+               $^{3}$Sackler School of Graduate Biomedical Sciences, Tufts University School of Medicine, Boston, MA, United States.}
+
+\usepackage{amsmath}
+\begin{document}
+
+%
+% Add hyperlink to the web location and license of the paper.
+% The argument of this command is the handler identifier given
+% by the Insight Journal to this paper.
+%
+\IJhandlefooter{\IJhandlerIDnumber}
+
+
+\ifpdf
+\else
+   %
+   % Commands for including Graphics when using latex
+   %
+   \DeclareGraphicsExtensions{.eps,.jpg,.gif,.tiff,.bmp,.png}
+   \DeclareGraphicsRule{.jpg}{eps}{.jpg.bb}{`convert #1 eps:-}
+   \DeclareGraphicsRule{.gif}{eps}{.gif.bb}{`convert #1 eps:-}
+   \DeclareGraphicsRule{.tiff}{eps}{.tiff.bb}{`convert #1 eps:-}
+   \DeclareGraphicsRule{.bmp}{eps}{.bmp.bb}{`convert #1 eps:-}
+   \DeclareGraphicsRule{.png}{eps}{.png.bb}{`convert #1 eps:-}
+\fi
+
+
+\maketitle
+
+
+\ifhtml
+\chapter*{Front Matter\label{front}}
+\fi
+
+\begin{abstract}
+
+\noindent
+
+Although phase data can take on any value, it is generally only possible to measure phase as a \emph{principle} value, i.e., wrapped within the range $(-\pi, \pi]$.  Determining the unwrapped phase from its principle value is a topic of considerable interest in magnetic resonance imaging (MRI), as well as many non-medical disciplines.  Despite their importance in image analysis, filters for manipulating phase information have not been incorporated into ITK.  This article introduces the ITKPhase module, containing filters useful for understanding, analyzing, and unwrapping $n$-dimensional phase data, and also serves as a practical introduction to phase unwrapping.
+
+\end{abstract}
+
+\IJhandlenote{\IJhandlerIDnumber}
+
+\tableofcontents
+\clearpage
+\input{includes/Background}
+\clearpage
+\input{includes/Quality}
+\clearpage
+\input{"includes/Phase Unwrapping"}
+\clearpage
+\input{includes/Examples}
+\clearpage
+\input{includes/Conclusions}
+\clearpage
+\input{includes/Appendix}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  Insert the bibliography using BibTeX
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\bibliographystyle{plain}
+\bibliography{InsightJournal}
+
+
+\end{document}
+
